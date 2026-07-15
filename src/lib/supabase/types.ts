@@ -577,6 +577,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_pending_booking: {
+        Args: { p_booking_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      cancel_pending_package_purchase: {
+        Args: { p_package_purchase_id: string }
+        Returns: undefined
+      }
+      confirm_package_purchase: {
+        Args: { p_package_purchase_id: string; p_stripe_session_id: string }
+        Returns: undefined
+      }
+      create_package_purchase_intent: {
+        Args: {
+          p_invitee_email: string
+          p_invitee_name: string
+          p_package_id: string
+        }
+        Returns: Json
+      }
       create_public_booking: {
         Args: {
           p_coupon_code?: string
@@ -586,11 +606,20 @@ export type Database = {
           p_invitee_name: string
           p_invitee_notes?: string
           p_invitee_timezone: string
+          p_package_purchase_id?: string
           p_start_time: string
         }
         Returns: Json
       }
+      get_available_package_session: {
+        Args: { p_event_type_id: string; p_invitee_email: string }
+        Returns: Json
+      }
       get_booking_confirmation: {
+        Args: { p_booking_id: string }
+        Returns: Json
+      }
+      get_booking_email_context: {
         Args: { p_booking_id: string }
         Returns: Json
       }
@@ -598,8 +627,24 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: Json
       }
+      get_package_for_checkout: {
+        Args: { p_package_id: string }
+        Returns: Json
+      }
+      get_package_purchase_confirmation: {
+        Args: { p_package_purchase_id: string }
+        Returns: Json
+      }
+      get_package_purchase_email_context: {
+        Args: { p_package_purchase_id: string }
+        Returns: Json
+      }
       get_public_availability_data: {
         Args: { p_event_type_id: string }
+        Returns: Json
+      }
+      submit_booking_review: {
+        Args: { p_booking_id: string; p_comment?: string; p_rating: number }
         Returns: Json
       }
     }

@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { sendConfirmationEmailsForBooking } from "@/lib/email";
 
 const bookingSchema = z.object({
   event_type_id: z.string().uuid(),
@@ -10,6 +11,7 @@ const bookingSchema = z.object({
   invitee_timezone: z.string().default("UTC"),
   invitee_notes: z.string().trim().max(2000).optional(),
   coupon_code: z.string().trim().optional(),
+  package_purchase_id: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -49,15 +51,26 @@ export async function POST(request: Request) {
     p_invitee_timezone: input.invitee_timezone,
     p_invitee_notes: input.invitee_notes,
     p_coupon_code: input.coupon_code,
+    p_package_purchase_id: input.package_purchase_id,
   });
 
   if (error) {
     const message = error.message.includes("SLOT_UNAVAILABLE")
       ? "That time is no longer available. Please pick another slot."
-      : "Could not create booking.";
-    return NextResponse.json({ error: message }, { status: error.message.includes("SLOT_UNAVAILABLE") ? 409 : 500 });
+      : error.message.includes("PACKAGE_SESSION_UNAVAILABLE")
+        ? "That package session is no longer available. Please refresh and try again."
+        : "Could not create booking.";
+    const status = error.message.includes("SLOT_UNAVAILABLE") || error.message.includes("PACKAGE_SESSION_UNAVAILABLE") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 
   const result = data as unknown as { booking_id: string; requires_payment: boolean };
+
+  if (!result.requires_payment) {
+    // Runs after the response is sent, but keeps the function alive until it settles —
+    // a plain un-awaited call risks the serverless instance freezing mid-send.
+    after(() => sendConfirmationEmailsForBooking(result.booking_id));
+  }
+
   return NextResponse.json({ bookingId: result.booking_id, requiresPayment: result.requires_payment });
 }

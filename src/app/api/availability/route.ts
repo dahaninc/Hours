@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { addDays } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { computeAvailableSlots, groupSlotsByLocalDate } from "@/lib/availability";
+import { getGoogleBusyIntervalsForHost } from "@/lib/google-calendar";
 
 type AvailabilityData = {
+  profile_id: string;
   event_type: {
     duration_minutes: number;
     buffer_before_minutes: number;
@@ -42,6 +44,8 @@ export async function GET(request: Request) {
   const rangeStart = new Date();
   const rangeEnd = addDays(rangeStart, days);
 
+  const googleBusyIntervals = await getGoogleBusyIntervalsForHost(availability.profile_id, rangeStart, rangeEnd);
+
   const slots = computeAvailableSlots({
     rules: availability.rules,
     overrides: availability.overrides,
@@ -49,10 +53,13 @@ export async function GET(request: Request) {
       start: new Date(b.start_time),
       end: new Date(b.end_time),
     })),
-    otherHostBookings: availability.other_bookings.map((b) => ({
-      start: new Date(b.start_time),
-      end: new Date(b.end_time),
-    })),
+    otherHostBookings: [
+      ...availability.other_bookings.map((b) => ({
+        start: new Date(b.start_time),
+        end: new Date(b.end_time),
+      })),
+      ...googleBusyIntervals,
+    ],
     hostTimezone: availability.host_timezone,
     durationMinutes: availability.event_type.duration_minutes,
     bufferBeforeMinutes: availability.event_type.buffer_before_minutes,

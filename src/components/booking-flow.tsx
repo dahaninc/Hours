@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, MapPin, ArrowLeft, Loader2 } from "lucide-react";
+import { Clock, MapPin, ArrowLeft, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { formatMoney } from "@/lib/utils";
 import type { Tables } from "@/lib/supabase/types";
 
 type SlotsByDate = Record<string, { start: string; end: string; spotsRemaining: number }[]>;
+
+type PackageSession = {
+  package_purchase_id: string;
+  sessions_remaining: number;
+  package_name: string;
+};
 
 const LOCATION_LABEL: Record<string, string> = {
   video: "Video call",
@@ -35,6 +41,12 @@ export function BookingFlow({
   const [step, setStep] = useState<"pick" | "details">("pick");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [packageSession, setPackageSession] = useState<PackageSession | null>(null);
+  const [checkingPackage, setCheckingPackage] = useState(false);
   const visitorTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
   useEffect(() => {
@@ -49,7 +61,25 @@ export function BookingFlow({
 
   const dates = slots ? Object.keys(slots).sort() : [];
 
-  async function handleConfirm(formData: FormData) {
+  async function checkForPackageSession(candidateEmail: string) {
+    if (!eventType.is_paid || !candidateEmail.includes("@")) {
+      setPackageSession(null);
+      return;
+    }
+    setCheckingPackage(true);
+    try {
+      const res = await fetch(
+        `/api/packages/session?event_type_id=${eventType.id}&email=${encodeURIComponent(candidateEmail)}`
+      );
+      const data = await res.json();
+      setPackageSession(data.session ?? null);
+    } finally {
+      setCheckingPackage(false);
+    }
+  }
+
+  async function handleConfirm(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     if (!selectedSlot) return;
     setSubmitting(true);
     setError(null);
@@ -61,11 +91,12 @@ export function BookingFlow({
         body: JSON.stringify({
           event_type_id: eventType.id,
           start_time: selectedSlot.start,
-          invitee_name: formData.get("name"),
-          invitee_email: formData.get("email"),
+          invitee_name: name,
+          invitee_email: email,
           invitee_timezone: visitorTimezone,
-          invitee_notes: formData.get("notes") || undefined,
-          coupon_code: formData.get("coupon_code") || undefined,
+          invitee_notes: notes || undefined,
+          coupon_code: packageSession ? undefined : couponCode || undefined,
+          package_purchase_id: packageSession?.package_purchase_id,
         }),
       });
       const data = await res.json();
@@ -200,32 +231,73 @@ export function BookingFlow({
                 })}
               </div>
             )}
-            <form action={handleConfirm} className="space-y-4">
+            <form onSubmit={handleConfirm} className="space-y-4">
               <div>
                 <Label htmlFor="name">Name</Label>
-                <Input id="name" name="name" required placeholder="Jane Doe" />
+                <Input
+                  id="name"
+                  name="name"
+                  required
+                  placeholder="Jane Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" required placeholder="jane@example.com" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="jane@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => checkForPackageSession(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="notes">Notes (optional)</Label>
-                <Textarea id="notes" name="notes" rows={3} placeholder="Anything to share before we meet?" />
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  rows={3}
+                  placeholder="Anything to share before we meet?"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
-              {eventType.is_paid && (
+              {eventType.is_paid && !packageSession && (
                 <div>
                   <Label htmlFor="coupon_code">Coupon code (optional)</Label>
-                  <Input id="coupon_code" name="coupon_code" placeholder="SAVE20" />
+                  <Input
+                    id="coupon_code"
+                    name="coupon_code"
+                    placeholder="SAVE20"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                  />
+                </div>
+              )}
+              {checkingPackage && (
+                <p className="text-[12px] text-foreground-subtle">Checking for available package sessions…</p>
+              )}
+              {packageSession && (
+                <div className="flex items-center gap-2 rounded-[var(--radius-sm)] bg-success-subtle px-3 py-2 text-[13px] text-success">
+                  <Ticket className="h-3.5 w-3.5 shrink-0" />
+                  Using 1 session from your {packageSession.package_name} package ({packageSession.sessions_remaining}{" "}
+                  remaining) — no payment needed.
                 </div>
               )}
               {error && <p className="text-[13px] text-danger">{error}</p>}
               <Button type="submit" size="lg" className="w-full" disabled={submitting}>
                 {submitting
                   ? "Booking…"
-                  : eventType.is_paid
-                    ? `Pay & confirm — ${formatMoney(eventType.price_cents, eventType.currency)}`
-                    : "Confirm booking"}
+                  : packageSession
+                    ? "Confirm booking (uses 1 session)"
+                    : eventType.is_paid
+                      ? `Pay & confirm — ${formatMoney(eventType.price_cents, eventType.currency)}`
+                      : "Confirm booking"}
               </Button>
             </form>
           </>

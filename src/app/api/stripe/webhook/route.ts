@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendConfirmationEmailsForBooking, sendPackagePurchaseConfirmationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -24,10 +25,11 @@ export async function POST(request: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const bookingId = session.metadata?.booking_id;
+    const packagePurchaseId = session.metadata?.package_purchase_id;
+    const supabase = createAdminClient();
 
     if (bookingId) {
-      const supabase = createAdminClient();
-      await supabase
+      const { data: updated } = await supabase
         .from("bookings")
         .update({
           status: "confirmed",
@@ -35,7 +37,23 @@ export async function POST(request: Request) {
           stripe_checkout_session_id: session.id,
         })
         .eq("id", bookingId)
-        .eq("status", "pending_payment");
+        .eq("status", "pending_payment")
+        .select("id")
+        .maybeSingle();
+
+      if (updated) {
+        after(() => sendConfirmationEmailsForBooking(bookingId));
+      }
+    }
+
+    if (packagePurchaseId) {
+      const { error } = await supabase.rpc("confirm_package_purchase", {
+        p_package_purchase_id: packagePurchaseId,
+        p_stripe_session_id: session.id,
+      });
+      if (!error) {
+        after(() => sendPackagePurchaseConfirmationEmail(packagePurchaseId));
+      }
     }
   }
 

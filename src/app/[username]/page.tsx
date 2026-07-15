@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Clock, Users, Star } from "lucide-react";
+import { Clock, Users, Star, Package as PackageIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ async function getProfileData(username: string) {
 
   if (!profile) return null;
 
-  const [{ data: eventTypes }, { data: reviews }] = await Promise.all([
+  const [{ data: eventTypes }, { data: reviews }, { data: packages }] = await Promise.all([
     supabase
       .from("event_types")
       .select("*")
@@ -27,9 +27,15 @@ async function getProfileData(username: string) {
       .select("rating")
       .eq("profile_id", profile.id)
       .eq("is_public", true),
+    supabase
+      .from("packages")
+      .select("*, event_types(title)")
+      .eq("profile_id", profile.id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
   ]);
 
-  return { profile, eventTypes: eventTypes ?? [], reviews: reviews ?? [] };
+  return { profile, eventTypes: eventTypes ?? [], reviews: reviews ?? [], packages: packages ?? [] };
 }
 
 export async function generateMetadata({
@@ -59,7 +65,7 @@ export default async function PublicProfilePage({
   const data = await getProfileData(username);
   if (!data) notFound();
 
-  const { profile, eventTypes, reviews } = data;
+  const { profile, eventTypes, reviews, packages } = data;
   const avgRating = reviews.length
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : null;
@@ -118,6 +124,38 @@ export default async function PublicProfilePage({
           </Link>
         ))}
       </div>
+
+      {packages.length > 0 && (
+        <div className="mt-10">
+          <h2 className="mb-3 text-sm font-semibold text-foreground-muted">Packages</h2>
+          <div className="space-y-3">
+            {packages.map((pkg) => (
+              <Link
+                key={pkg.id}
+                href={`/${username}/packages/${pkg.id}`}
+                className="group flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-surface p-5 transition-all hover:border-accent hover:shadow-[var(--shadow-glow)]"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+                    <PackageIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">{pkg.name}</div>
+                    <div className="mt-0.5 text-[13px] text-foreground-muted">
+                      {pkg.session_count} sessions of{" "}
+                      {(pkg.event_types as unknown as { title: string } | null)?.title ?? "an event"}
+                      {pkg.is_subscription ? ` · renews every ${pkg.interval}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="shrink-0 whitespace-nowrap pl-4 text-sm font-medium">
+                  {formatMoney(pkg.price_cents, pkg.currency)}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-16 text-center text-[12px] text-foreground-subtle">
         Powered by{" "}

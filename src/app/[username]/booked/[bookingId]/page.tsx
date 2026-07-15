@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, Calendar as CalendarIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { ReviewForm } from "@/components/review-form";
 
 type BookingConfirmation = {
   status: string;
@@ -12,6 +13,8 @@ type BookingConfirmation = {
   event_type_title: string;
   location_type: string;
   location_value: string | null;
+  can_review: boolean;
+  existing_review: { rating: number; comment: string | null } | null;
 };
 
 export default async function BookingConfirmationPage({
@@ -53,11 +56,15 @@ export default async function BookingConfirmationPage({
         </p>
         <p className="mt-1 text-[13px] text-foreground-subtle">A confirmation was sent to {booking.invitee_email}</p>
 
-        <a href={googleCalUrl} target="_blank" rel="noreferrer" className="mt-6 block">
-          <Button variant="secondary" className="w-full">
-            <CalendarIcon className="h-4 w-4" /> Add to Google Calendar
-          </Button>
-        </a>
+        {booking.can_review && <ReviewForm bookingId={bookingId} existingReview={booking.existing_review} />}
+
+        {!booking.can_review && (
+          <a href={googleCalUrl} target="_blank" rel="noreferrer" className="mt-6 block">
+            <Button variant="secondary" className="w-full">
+              <CalendarIcon className="h-4 w-4" /> Add to Google Calendar
+            </Button>
+          </a>
+        )}
 
         <Link href={`/${username}`} className="mt-3 block text-[13px] text-foreground-muted hover:text-accent">
           Back to {username}&apos;s page

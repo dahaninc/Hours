@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutGrid, CalendarClock, Clock, Command, Copy, Check, ExternalLink } from "lucide-react";
+import { LayoutGrid, CalendarClock, Clock, Command, Copy, Check, ExternalLink, Ticket, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -11,6 +11,8 @@ const NAV = [
   { href: "/dashboard/event-types", label: "Event types", icon: CalendarClock },
   { href: "/dashboard/availability", label: "Availability", icon: Clock },
   { href: "/dashboard/bookings", label: "Bookings", icon: CalendarClock },
+  { href: "/dashboard/packages", label: "Packages", icon: Package },
+  { href: "/dashboard/coupons", label: "Coupons", icon: Ticket },
 ];
 
 export function DashboardSidebar({ username }: { username: string }) {

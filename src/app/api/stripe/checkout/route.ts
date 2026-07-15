@@ -33,24 +33,36 @@ export async function POST(request: Request) {
   const booking = data as unknown as CheckoutBooking;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: booking.invitee_email,
-    line_items: [
-      {
-        price_data: {
-          currency: booking.currency,
-          unit_amount: booking.amount_cents,
-          product_data: { name: booking.event_type_title },
+  try {
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: booking.invitee_email,
+      line_items: [
+        {
+          price_data: {
+            currency: booking.currency,
+            unit_amount: booking.amount_cents,
+            product_data: { name: booking.event_type_title },
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      },
-    ],
-    metadata: { booking_id: booking.booking_id },
-    success_url: `${siteUrl}/${booking.username}/booked/${booking.booking_id}`,
-    cancel_url: `${siteUrl}/${booking.username}`,
-  });
+      ],
+      metadata: { booking_id: booking.booking_id },
+      success_url: `${siteUrl}/${booking.username}/booked/${booking.booking_id}`,
+      cancel_url: `${siteUrl}/${booking.username}`,
+    });
 
-  return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url });
+  } catch {
+    // Free the slot rather than leaving an unpayable booking stuck in pending_payment forever.
+    await supabase.rpc("cancel_pending_booking", {
+      p_booking_id: booking.booking_id,
+      p_reason: "payment_setup_unavailable",
+    });
+    return NextResponse.json(
+      { error: "Payments aren't set up for this host yet. Please contact them directly to book." },
+      { status: 503 }
+    );
+  }
 }
