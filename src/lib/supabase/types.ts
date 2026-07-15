@@ -257,6 +257,39 @@ export type Database = {
           },
         ]
       }
+      costs: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          incurred_on: string
+          name: string
+          notes: string | null
+          recurrence: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          id?: string
+          incurred_on?: string
+          name: string
+          notes?: string | null
+          recurrence?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          incurred_on?: string
+          name?: string
+          notes?: string | null
+          recurrence?: string
+        }
+        Relationships: []
+      }
       coupons: {
         Row: {
           amount_off_cents: number | null
@@ -432,6 +465,53 @@ export type Database = {
           },
         ]
       }
+      host_purchases: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          plan: string
+          profile_id: string
+          refunded_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          plan?: string
+          profile_id: string
+          refunded_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          plan?: string
+          profile_id?: string
+          refunded_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "host_purchases_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       package_purchases: {
         Row: {
           created_at: string
@@ -577,8 +657,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       cancel_pending_booking: {
         Args: { p_booking_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      cancel_pending_host_purchase: {
+        Args: { p_host_purchase_id: string }
         Returns: undefined
       }
       cancel_pending_package_purchase: {
@@ -588,6 +676,10 @@ export type Database = {
       confirm_package_purchase: {
         Args: { p_package_purchase_id: string; p_stripe_session_id: string }
         Returns: undefined
+      }
+      create_host_purchase_intent: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       create_package_purchase_intent: {
         Args: {

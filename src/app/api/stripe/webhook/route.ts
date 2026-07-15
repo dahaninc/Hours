@@ -2,7 +2,11 @@ import { NextResponse, after } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendConfirmationEmailsForBooking, sendPackagePurchaseConfirmationEmail } from "@/lib/email";
+import {
+  sendConfirmationEmailsForBooking,
+  sendPackagePurchaseConfirmationEmail,
+  sendHostPurchaseConfirmationEmail,
+} from "@/lib/email";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -26,6 +30,7 @@ export async function POST(request: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const bookingId = session.metadata?.booking_id;
     const packagePurchaseId = session.metadata?.package_purchase_id;
+    const hostPurchaseId = session.metadata?.host_purchase_id;
     const supabase = createAdminClient();
 
     if (bookingId) {
@@ -53,6 +58,24 @@ export async function POST(request: Request) {
       });
       if (!error) {
         after(() => sendPackagePurchaseConfirmationEmail(packagePurchaseId));
+      }
+    }
+
+    if (hostPurchaseId) {
+      const { data: updated } = await supabase
+        .from("host_purchases")
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+          stripe_checkout_session_id: session.id,
+        })
+        .eq("id", hostPurchaseId)
+        .eq("status", "pending")
+        .select("id")
+        .maybeSingle();
+
+      if (updated) {
+        after(() => sendHostPurchaseConfirmationEmail(hostPurchaseId));
       }
     }
   }

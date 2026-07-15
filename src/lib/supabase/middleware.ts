@@ -32,12 +32,22 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isDashboard = path.startsWith("/dashboard");
+  const isAdmin = path.startsWith("/admin");
   const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
 
-  if (!user && isDashboard) {
+  if (!user && (isDashboard || isAdmin)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", path);
+    return NextResponse.redirect(url);
+  }
+
+  // Fast first line of defense — the page itself (requireAdmin in src/lib/get-admin.ts)
+  // is the authoritative check and 404s instead, so a logged-in non-admin never sees
+  // this redirect target confirm anything either way.
+  if (user && isAdmin && user.email?.toLowerCase() !== "president@ourz.io") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

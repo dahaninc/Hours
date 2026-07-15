@@ -159,6 +159,45 @@ export async function sendPackagePurchaseConfirmationEmail(packagePurchaseId: st
   }
 }
 
+/** Uses the admin client's Auth API directly (getUserById) rather than another RPC — service-role clients can call GoTrue's admin endpoints, sidestepping the "PostgREST can't see auth.users" limitation entirely. */
+export async function sendHostPurchaseConfirmationEmail(hostPurchaseId: string) {
+  try {
+    const admin = createAdminClient();
+    const { data: purchase } = await admin
+      .from("host_purchases")
+      .select("profile_id, amount_cents, currency")
+      .eq("id", hostPurchaseId)
+      .single();
+    if (!purchase) return;
+
+    const [{ data: profile }, { data: userResult }] = await Promise.all([
+      admin.from("profiles").select("display_name").eq("id", purchase.profile_id).single(),
+      admin.auth.admin.getUserById(purchase.profile_id),
+    ]);
+    const hostEmail = userResult?.user?.email;
+    if (!hostEmail) return;
+
+    const resend = getResend();
+    if (!resend) {
+      console.warn("[email] RESEND_API_KEY not set — skipping host purchase confirmation email.");
+      return;
+    }
+
+    await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: hostEmail,
+      subject: "You're all set — lifetime access to Hours",
+      html: `
+        <p>Hi ${escapeHtml(profile?.display_name ?? "there")},</p>
+        <p>Your payment of ${(purchase.amount_cents / 100).toFixed(2)} ${purchase.currency.toUpperCase()} is confirmed —
+        you now have lifetime access to Hours. Thank you for your support!</p>
+      `,
+    });
+  } catch (err) {
+    console.error("[email] Failed to send host purchase confirmation:", err);
+  }
+}
+
 function escapeHtml(input: string) {
   return input
     .replace(/&/g, "&amp;")
